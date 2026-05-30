@@ -217,3 +217,55 @@ html, body, #root {
   font-family: 'SF Mono', ui-monospace, monospace;
   flex-shrink: 0;
 }
+
+/* View toggle buttons */
+.view-toggles {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  display: flex;
+  gap: 6px;
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  font-size: 11px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: all 0.2s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.toggle-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.8);
+  border-color: rgba(255,255,255,0.2);
+}
+
+.toggle-btn.active {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: #4ade80;
+}
+
+.toggle-btn.active:hover {
+  background: rgba(74, 222, 128, 0.2);
+}
+
+.toggle-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.toggle-label {
+  font-weight: 500;
+}

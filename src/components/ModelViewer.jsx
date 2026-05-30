@@ -265,7 +265,7 @@ function localToObjXform(child, obj) {
   return xform
 }
 
-function ModelViewer({ selectedPart }) {
+function ModelViewer({ selectedPart, showSlotLabels = true }) {
   const groupRef = useRef()
   const [slotStates, setSlotStates] = useState({ ...window.__slotStates })
   const [lightOn, setLightOn] = useState(false)
@@ -438,7 +438,7 @@ function ModelViewer({ selectedPart }) {
         <FlashingLights obj={obj} on={lightOn} />
       </group>
 
-      {worldLabels.map((wl, i) => {
+      {showSlotLabels && worldLabels.map((wl, i) => {
         const slotIdx = i + 1
         const state = slotStates[slotIdx] || 'idle'
         const c = slotColors[state].border
@@ -469,7 +469,7 @@ function ModelViewer({ selectedPart }) {
         )
       })}
 
-      {worldLabels.map((wl, i) => {
+      {showSlotLabels && worldLabels.map((wl, i) => {
         const slotIdx = i + 1
         const state = slotStates[slotIdx] || 'idle'
         return (

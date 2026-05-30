@@ -6,7 +6,7 @@ import UIScreen from './components/UIScreen'
 import SensorPanel from './components/SensorPanel'
 import './App.css'
 
-function Scene({ selectedPart, modelCenter }) {
+function Scene({ selectedPart, modelCenter, showSlotLabels }) {
   return (
     <>
       <color attach="background" args={['#1c1c20']} />
@@ -17,7 +17,7 @@ function Scene({ selectedPart, modelCenter }) {
       <directionalLight position={[-10, 5, -10]} intensity={0.8} color="#bbddcc" />
       <hemisphereLight args={['#ffffff', '#666677', 0.3]} />
       <Suspense fallback={null}>
-        <ModelViewer selectedPart={selectedPart} />
+        <ModelViewer selectedPart={selectedPart} showSlotLabels={showSlotLabels} />
         <Environment files="/textures/clouds_2K.exr" />
       </Suspense>
       <OrbitControls
@@ -34,6 +34,9 @@ function App() {
   const [selectedPart, setSelectedPart] = useState(null)
   const [modelCenter, setModelCenter] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showPartsList, setShowPartsList] = useState(true)
+  const [showSlotLabels, setShowSlotLabels] = useState(true)
+  const [showUIScreen, setShowUIScreen] = useState(true)
 
   useEffect(() => {
     if (window.__modelInfo) setTimeout(() => setLoading(false), 300)
@@ -63,6 +66,34 @@ function App() {
         <span>✋ 右键平移</span>
       </div>
 
+      {/* View toggle buttons - top-right */}
+      <div className="view-toggles">
+        <button
+          className={`toggle-btn${showPartsList ? ' active' : ''}`}
+          onClick={() => setShowPartsList(v => !v)}
+          title="折叠/显示零件列表"
+        >
+          <span className="toggle-icon">📋</span>
+          <span className="toggle-label">零件列表</span>
+        </button>
+        <button
+          className={`toggle-btn${showSlotLabels ? ' active' : ''}`}
+          onClick={() => setShowSlotLabels(v => !v)}
+          title="显示/隐藏电池槽标签"
+        >
+          <span className="toggle-icon">🏷️</span>
+          <span className="toggle-label">槽位标签</span>
+        </button>
+        <button
+          className={`toggle-btn${showUIScreen ? ' active' : ''}`}
+          onClick={() => setShowUIScreen(v => !v)}
+          title="显示/隐藏UI屏显"
+        >
+          <span className="toggle-icon">🖥️</span>
+          <span className="toggle-label">屏显界面</span>
+        </button>
+      </div>
+
       <div className="main-layout">
         <div className="canvas-wrapper">
           <Canvas
@@ -70,42 +101,46 @@ function App() {
             gl={{ antialias: true, toneMapping: 3, toneMappingExposure: 1.2, alpha: false }}
             shadows
           >
-            <Scene selectedPart={selectedPart} modelCenter={modelCenter} />
+            <Scene selectedPart={selectedPart} modelCenter={modelCenter} showSlotLabels={showSlotLabels} />
           </Canvas>
 
           <SensorPanel />
 
-          <div className="prototype-float">
-            <div className="proto-float-header">前瞻特性分支：输出控制</div>
-            <div className="proto-float-body">
-              <UIScreen />
+          {showUIScreen && (
+            <div className="prototype-float">
+              <div className="proto-float-header">前瞻特性分支：输出控制</div>
+              <div className="proto-float-body">
+                <UIScreen />
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        <div className="part-sidebar">
-          <div className="part-sidebar-header">
-            模型零件
-            {parts.length > 0 && <span className="part-count">{parts.length}</span>}
+        {showPartsList && (
+          <div className="part-sidebar">
+            <div className="part-sidebar-header">
+              模型零件
+              {parts.length > 0 && <span className="part-count">{parts.length}</span>}
+            </div>
+            <div className="part-list">
+              {parts.length === 0 ? (
+                <div className="part-list-empty">加载中...</div>
+              ) : (
+                parts.map((p, i) => (
+                  <div
+                    key={i}
+                    className={`part-item${selectedPart === i ? ' selected' : ''}`}
+                    onClick={() => setSelectedPart(selectedPart === i ? null : i)}
+                  >
+                    <span className="part-color-dot" style={{ background: p.color || '#888' }} />
+                    <span className="part-name">{p.name}</span>
+                    <span className="part-material" title={p.materialName}>{p.materialLabel}</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-          <div className="part-list">
-            {parts.length === 0 ? (
-              <div className="part-list-empty">加载中...</div>
-            ) : (
-              parts.map((p, i) => (
-                <div
-                  key={i}
-                  className={`part-item${selectedPart === i ? ' selected' : ''}`}
-                  onClick={() => setSelectedPart(selectedPart === i ? null : i)}
-                >
-                  <span className="part-color-dot" style={{ background: p.color || '#888' }} />
-                  <span className="part-name">{p.name}</span>
-                  <span className="part-material" title={p.materialName}>{p.materialLabel}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        )}
       </div>
 
       <div className={`loading-overlay${loading ? '' : ' hidden'}`}>
