@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>高机动能源节点 — 前瞻特性分支：输出控制</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:'SimHei','Microsoft YaHei','Heiti SC',sans-serif;
+  background:#1a1a1a;display:flex;flex-direction:column;align-items:center;
+  min-height:100vh;padding:20px;gap:20px;color:#fff
+}
+.screen-wrapper{flex-shrink:0;transform-origin:top left;will-change:transform}
+.screen{
+  width:533px;height:320px;background:#000;border:8px solid #222;
+  border-radius:12px;overflow:hidden;position:relative
+}
+/* .badge removed per request */
+.display{
+  width:100%;height:100%;background:#000;color:#fff;padding:8px;
+  font-size:13px;line-height:1.2;display:flex;flex-direction:row;gap:8px;position:relative
+}
+
+/* ── 左右槽位列 ── */
+.col-slots{width:90px;display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.col-title{font-size:11px;font-weight:bold;text-align:center;padding:2px;border-bottom:1px solid #555;margin-bottom:2px}
+.slot{
+  border:2px solid #555;padding:3px 5px;font-size:11px;flex:1;display:flex;
+  flex-direction:column;justify-content:flex-end;position:relative;min-height:0;transition:border-color .3s
+}
+.slot.error{border-color:#e74c3c}
+.slot-top{display:flex;justify-content:space-between;align-items:baseline}
+.slot-num{font-weight:bold;font-size:14px}
+.slot-state{font-size:11px}
+.slot-pct{font-size:22px;font-weight:bold;line-height:1.1;margin:1px 0 2px 0}
+.slot-bar{
+  width:100%;height:6px;background:rgba(255,255,255,0.10);
+  border-radius:3px;overflow:hidden;flex-shrink:0
+}
+.slot-bar div{
+  height:100%;width:0%;background:#fff;border-radius:3px;transition:width .4s ease
+}
+.slot.charged .slot-bar div,.slot.charged .slot-pct{color:#2ecc71}
+.slot.charged .slot-bar div{background:#2ecc71}
+.slot.error .slot-bar div{background:#e74c3c}
+
+/* ── 中间主区域 ── */
+.main{
+  flex:1;display:flex;flex-direction:column;border:2px solid #555;
+  padding:8px;background:rgba(255,255,255,0.03);position:relative;overflow:hidden
+}
+.pages-wrap{flex:1;display:flex;overflow:hidden;position:relative;min-height:0}
+.pages{display:flex;flex-wrap:nowrap;width:100%;transition:transform .3s ease}
+.page{flex:0 0 100%;display:flex;flex-direction:column;padding:0 4px;min-width:0}
+.dots{display:flex;justify-content:center;gap:6px;margin-top:auto;padding-top:4px}
+.dot{width:5px;height:5px;border-radius:50%;background:#555;transition:background .2s}
+.dot.on{background:#fff}
+
+/* ── 顶栏 ── */
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.node{display:flex;align-items:center;gap:8px}
+.signal{display:flex;align-items:flex-end;gap:2px;height:16px}
+.signal div{width:3px;background:#fff}
+.signal div:nth-child(1){height:4px}.signal div:nth-child(2){height:8px}
+.signal div:nth-child(3){height:12px}.signal div:nth-child(4){height:16px}
+.signal .off{background:#444}
+.nid{font-size:14px;font-weight:bold}
+.topright{display:flex;align-items:center;gap:8px}
+.pgroup{display:flex;align-items:center;gap:8px}
+.psrc{display:flex;align-items:center;gap:4px}
+.ps{
+  display:flex;align-items:center;gap:2px;font-size:9px;padding:2px 3px;
+  border:1px solid #555;color:#555;transition:all .3s
+}
+.ps.on{border-color:#fff;color:#fff}
+.stat{font-size:12px;font-weight:bold}
+.stat.chg{animation:blink 1s infinite}
+@keyframes blink{0%,45%{opacity:1}50%,95%{opacity:0}100%{opacity:1}}
+
+/* ── 第0页：电池概览 ── */
+.big{font-size:100px;font-weight:900;text-align:left;letter-spacing:2px;line-height:.85;min-width:3ch}
+.btm{margin-top:auto;display:flex;flex-direction:column}
+.srow{display:flex;justify-content:center;gap:12px;margin-bottom:6px}
+.si{text-align:center}
+.si .sv{font-weight:bold;font-size:16px;display:block}
+.si .sl{color:#888;font-size:10px}
+.barbox{height:14px;border:2px solid #555;background:rgba(255,255,255,0.1)}
+.bar{height:100%;background:#fff;transition:width .5s ease;min-width:0}
+.bar.low{background:repeating-linear-gradient(45deg,#fff,#fff 3px,transparent 3px,transparent 6px)}
+.outs{
+  display:flex;justify-content:space-between;margin:4px 0 6px 0;padding:0 2px;
+  border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:4px
+}
+.op{display:flex;flex-direction:column;align-items:center;gap:1px;padding:2px 6px;border-left:1px solid rgba(255,255,255,0.1)}
+.op:first-child{border-left:none}
+.opn{font-size:8px;color:#888}
+.ops{font-size:9px;font-weight:bold;color:#555}
+.ops.on{color:#fff}
+
+/* ── 第1页：电源输入 + 输出控制 ── */
+.pg1{display:flex;flex-direction:column;flex:1;gap:6px;padding:2px 0}
+.pg1 .ib{font-size:13px;font-weight:bold;text-align:center;padding:6px;border:2px solid #fff;width:100%}
+.pg1 .grid{display:flex;flex-wrap:wrap;gap:4px}
+.pg1 .grid .oc{
+  flex:1 0 calc(50% - 2px);display:flex;align-items:center;justify-content:space-between;
+  padding:5px 8px;border:2px solid #555;border-radius:4px;font-size:12px;cursor:pointer;
+  transition:all .25s;user-select:none
+}
+.pg1 .grid .oc.on{border-color:#2ecc71;background:rgba(46,204,113,0.08)}
+.pg1 .grid .oc.off{border-color:#555;background:transparent}
+.pg1 .grid .oc .ocn{font-weight:bold}
+.pg1 .grid .oc .ocv{font-size:11px;color:#888}
+.pg1 .grid .oc.on .ocv{color:#2ecc71}
+.pg1 .grid .oc:active{opacity:.6}
+.pg1 .lo{border-top:1px solid rgba(255,255,255,0.1);padding:4px 8px;display:flex;justify-content:space-between;font-size:11px;margin-top:auto}
+.pg1 .lo .lov{color:#888}
+.pg1 .lo .lov.on{color:#fff;font-weight:bold}
+
+/* ── 第2页：系统 ── */
+.sys{display:flex;flex-direction:column;justify-content:center;gap:6px;flex:1;padding:0 8px}
+.sr{display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.1)}
+.sr .lb{color:#888;font-size:12px}.sr .vl{font-weight:bold;font-size:13px}
+
+/* ── 故障横幅 ── */
+.fb{
+  position:absolute;top:0;left:0;right:0;background:#8b0000;color:#fff;
+  display:none;align-items:center;justify-content:space-between;
+  padding:8px 12px;z-index:15;border-bottom:2px solid #ff4444
+}
+.fb.show{display:flex}
+.fbx{display:flex;align-items:center;gap:8px}
+.fbi{font-size:16px;font-weight:bold}
+.fbt{font-size:13px;font-weight:bold}
+.fbc{font-size:18px;cursor:pointer;padding:0 6px;user-select:none;border:1px solid rgba(255,255,255,.5);border-radius:2px}
+.fbc:active{opacity:.5}
+
+/* ── 爆发覆盖层 ── */
+.bo{
+  position:absolute;top:0;left:0;right:0;bottom:0;background:#8b0000;
+  color:#fff;display:none;flex-direction:column;justify-content:center;
+  align-items:center;padding:15px;z-index:20
+}
+.bo.show{display:flex}
+.bc{text-align:center}
+.bct{font-size:24px;font-weight:bold;margin-bottom:20px}
+.bcm{font-size:18px;margin-bottom:30px}
+.bch{font-size:14px;animation:blink 1s infinite}
+.br{width:100%;height:100%;display:flex;flex-direction:column;justify-content:space-around}
+.brh{text-align:center;font-size:16px;font-weight:bold;padding-bottom:10px;border-bottom:2px solid rgba(255,255,255,.5)}
+.brm{display:flex;justify-content:space-around;align-items:center;flex:1}
+.brbv{font-size:72px;font-weight:bold}.brbl{font-size:14px}
+.brtv{font-size:48px;font-weight:bold}.brs{display:flex;justify-content:space-around;padding:10px;border-top:2px solid rgba(255,255,255,.5)}
+.brsv{font-size:24px;font-weight:bold}.brsl{font-size:12px}
+.bcpt{font-size:28px;font-weight:bold;margin-bottom:20px}
+.bcpm{font-size:20px;line-height:1.6}
+
+/* ── 安全告警 ── */
+.ao{
+  position:absolute;top:0;left:0;right:0;bottom:0;z-index:18;
+  display:none;flex-direction:column;justify-content:center;align-items:center;
+  padding:20px;text-align:center
+}
+.ao.show{display:flex}
+.ao.gas{background:#8b4513}.ao.liquid{background:#1a5276}
+.aoi{font-size:32px;font-weight:bold;margin-bottom:10px}
+.aot{font-size:22px;font-weight:bold;margin-bottom:8px}
+.aov{font-size:28px;font-weight:bold;margin-bottom:6px}
+.aom{font-size:14px;margin-bottom:20px;line-height:1.5}
+.aoc{
+  font-size:16px;cursor:pointer;padding:6px 20px;
+  border:2px solid rgba(255,255,255,.7);border-radius:4px;user-select:none;background:transparent;color:#fff
+}
+.aoc:active{opacity:.6}
+
+/* ── 控制面板 ── */
+.ctrl{width:533px;padding:20px;background:#2a2a2a;border-radius:8px;color:#fff}
+.ctrl h3{font-size:16px;margin-bottom:12px;border-bottom:1px solid #444;padding-bottom:6px}
+.ctrl h4{font-size:14px;margin:12px 0 8px;color:#ccc}
+.ctrl hr{border:none;border-top:1px solid #444;margin:10px 0}
+.cr{display:flex;align-items:center;margin-bottom:8px;gap:8px}
+.cr label{min-width:60px;font-size:13px}
+.cr select{padding:4px 10px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:13px}
+.cr input[type=range]{flex:1;max-width:180px}
+.cr span{font-size:13px;min-width:40px}
+.estop{background:none;border:none;cursor:pointer;padding:0;display:block;margin:10px auto 0;width:88px;height:88px;position:relative;outline:none}
+.estop:active .estop-inner{transform:scale(0.93)}
+.estop:disabled{opacity:.4;cursor:not-allowed}
+.estop:disabled:active .estop-inner{transform:none}
+.estop-outer{width:88px;height:88px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ddd,#999,#666);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.6),inset 0 2px 4px rgba(255,255,255,.3)}
+.estop-inner{width:74px;height:74px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#ff6b6b,#c0392b);display:flex;flex-direction:column;align-items:center;justify-content:center;border:3px solid #e74c3c;transition:transform .1s;box-shadow:inset 0 -3px 6px rgba(0,0,0,.3),inset 0 3px 6px rgba(255,255,255,.15)}
+.estop-icon{font-size:22px;line-height:1;margin-bottom:1px}
+.estop-label{font-size:9px;font-weight:bold;letter-spacing:1px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.estop-text{text-align:center;font-size:11px;color:#888;margin-top:6px}
+.note{font-size:12px;color:#888;margin-top:16px;line-height:1.6}
+.note kbd{background:#333;padding:1px 5px;border-radius:3px;border:1px solid #555}
+.hint{font-size:11px;color:#e67e22;margin-top:8px;padding:6px 10px;border:1px dashed #e67e22;border-radius:4px;background:rgba(230,126,34,0.06)}
+</style>
+</head>
+<body>
+
+<div class="screen-wrapper" id="wrapper">
+<div class="screen">
+<!-- 前瞻特性标签已移除 -->
+<div class="display">
+
+  <!-- 左列：槽 1-3 -->
+  <div class="col-slots">
+    <div class="col-title">槽 1-3</div>
+    <div class="slot" id="s1"><div class="slot-top"><span class="slot-num">1</span><span class="slot-state">充电</span></div><div class="slot-pct">65%</div><div class="slot-bar"><div></div></div></div>
+    <div class="slot" id="s2"><div class="slot-top"><span class="slot-num">2</span><span class="slot-state">充电</span></div><div class="slot-pct">42%</div><div class="slot-bar"><div></div></div></div>
+    <div class="slot" id="s3"><div class="slot-top"><span class="slot-num">3</span><span class="slot-state">空闲</span></div><div class="slot-pct">--</div><div class="slot-bar"><div></div></div></div>
+  </div>
+
+  <!-- 中间 -->
+  <div class="main" id="mainArea">
+
+    <div class="fb" id="fb"><div class="fbx"><span class="fbi">⚠</span><span class="fbt" id="fbt">电池故障</span></div><span class="fbc" id="fbc">✕</span></div>
+
+    <div class="topbar">
+      <div class="node">
+        <div class="signal"><div></div><div></div><div></div><div></div></div>
+        <span class="nid">节点-01</span>
+      </div>
+      <div class="topright">
+        <div class="pgroup">
+          <div class="psrc">
+            <div class="ps on" id="ps0">☀︎ 太阳能</div>
+            <div class="ps" id="ps1">~ 220V</div>
+            <div class="ps" id="ps2">▣ 48V</div>
+          </div>
+        </div>
+        <div class="stat chg" id="stat">● 充电中</div>
+      </div>
+    </div>
+
+    <div class="pages-wrap"><div class="pages" id="pages">
+
+      <!-- 第0页：电池概览 -->
+      <div class="page">
+        <div class="btm">
+          <div class="outs">
+            <div class="op"><span class="opn">USB-A</span><span class="ops" id="ouA">--</span></div>
+            <div class="op"><span class="opn">USB-C</span><span class="ops on" id="ouC">45W</span></div>
+            <div class="op"><span class="opn">SB30</span><span class="ops on" id="oSB">350W</span></div>
+            <div class="op"><span class="opn">220V</span><span class="ops" id="oAc">--</span></div>
+          </div>
+          <div class="big" id="big">78%</div>
+          <div class="srow">
+            <div class="si"><span class="sv" id="svV">25.8V</span><span class="sl">电压</span></div>
+            <div class="si"><span class="sv" id="svT">32°C</span><span class="sl">温度</span></div>
+            <div class="si"><span class="sv" id="svR">2.5h</span><span class="sl">续航</span></div>
+            <div class="si"><span class="sv" id="svC">128</span><span class="sl">循环</span></div>
+          </div>
+          <div class="barbox"><div class="bar" id="bar" style="width:78%"></div></div>
+        </div>
+      </div>
+
+      <!-- 第1页：电源输入 + 输出控制（前瞻特性） -->
+      <div class="page">
+        <div class="pg1">
+          <div class="ib" id="ib">● 太阳能供电中</div>
+          <div class="grid" id="outGrid">
+            <div class="oc on" data-port="sb30"><span class="ocn">SB30</span><span class="ocv">350W</span></div>
+            <div class="oc off" data-port="light"><span class="ocn">💡 照明</span><span class="ocv">30W</span></div>
+            <div class="oc on" style="border-color:#888;cursor:default;opacity:0.7" title="USB 常驻"><span class="ocn">USB</span><span class="ocv">18+100W</span></div>
+            
+            <div class="oc on" data-port="ac"><span class="ocn">220V</span><span class="ocv">500W</span></div>
+            <div class="oc off" data-port="light"><span class="ocn">💡 照明</span><span class="ocv">30W</span></div>
+          </div>
+          <div class="lo">
+            <span>总输出</span>
+            <span class="lov on" id="totOut">888W</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 第2页：系统信息 -->
+      <div class="page">
+        <div class="sys">
+          <div class="sr"><span class="lb">设备型号</span><span class="vl">HMP-750</span></div>
+          <div class="sr"><span class="lb">固件版本</span><span class="vl">V2.2.1</span></div>
+          <div class="sr"><span class="lb">电池健康</span><span class="vl" id="sysH">98%</span></div>
+          <div class="sr"><span class="lb">充满循环</span><span class="vl" id="sysC">128</span></div>
+          <div class="sr"><span class="lb">运行时长</span><span class="vl">1,280h</span></div>
+          <div class="sr"><span class="lb">防护等级</span><span class="vl">IP67</span></div>
+        </div>
+      </div>
+
+    </div></div>
+
+    <div class="dots" id="dots"><div class="dot on"></div><div class="dot"></div><div class="dot"></div></div>
+  </div>
+
+  <!-- 右列：槽 4-6 -->
+  <div class="col-slots">
+    <div class="col-title">槽 4-6</div>
+    <div class="slot" id="s4"><div class="slot-top"><span class="slot-num">4</span><span class="slot-state">充电</span></div><div class="slot-pct">88%</div><div class="slot-bar"><div></div></div></div>
+    <div class="slot" id="s5"><div class="slot-top"><span class="slot-num">5</span><span class="slot-state">空闲</span></div><div class="slot-pct">--</div><div class="slot-bar"><div></div></div></div>
+    <div class="slot error" id="s6"><div class="slot-top"><span class="slot-num">6</span><span class="slot-state">故障</span></div><div class="slot-pct">ERR</div><div class="slot-bar"><div></div></div></div>
+  </div>
+
+</div><!-- /display -->
+
+<div class="bo" id="bo">
+  <div class="bc" id="bc"><div class="bct">⚡ 爆发输出模式</div><div class="bcm">将以最大功率输出<br>直至电量耗尽</div><div class="bch">再次按下开关确认启动</div></div>
+  <div class="br" id="br" style="display:none"><div class="brh">⚡ 爆发输出中</div><div class="brm"><div><div class="brbv" id="bbv">78%</div><div class="brbl">剩余电量</div></div><div><div class="brtv" id="btv">12:30</div><div class="brbl">预计剩余时间</div></div></div><div class="brs"><div><div class="brsv" id="bts">45°C</div><div class="brsl">主机温度</div></div><div><div class="brsv" id="bpw">720W</div><div class="brsl">实时功率</div></div></div></div>
+  <div class="bc" id="bc2" style="display:none"><div class="bcpt">✓ 能量已释放完毕</div><div class="bcpm">该能源节点已完成使命<br>请勿继续使用</div></div>
+</div>
+
+<div class="ao gas" id="ga"><div class="aoi">☠</div><div class="aot">可燃气体浓度过高</div><div class="aov" id="gav">0% LEL</div><div class="aom">存在爆炸风险<br>已切断所有充电回路</div><button class="aoc" id="gac">解除警告</button></div>
+<div class="ao liquid" id="la"><div class="aoi">💧</div><div class="aot">液体侵入告警</div><div class="aov">检测到液体渗入</div><div class="aom">设备存在短路风险<br>已切断所有充电回路</div><button class="aoc" id="lac">解除警告</button></div>
+
+</div><!-- /screen -->
+</div><!-- /wrapper -->
+
+<!-- ── 控制面板 ── -->
+<div class="ctrl">
+  <h3>UI 测试控制 <span style="font-size:11px;color:#e67e22;font-weight:normal">· 前瞻特性分支</span></h3>
+  <div class="cr"><label>主电量</label><input type="range" id="batSlider" min="0" max="100" value="78"><span id="batVal">78%</span></div>
+  <div class="cr"><label>电源输入</label><select id="psSel"><option value="solar" selected>太阳能</option><option value="mains">220V 市电</option><option value="diesel">48V 柴油发电机</option><option value="none">无输入</option></select></div>
+  <hr>
+  <h4>输出接口（点击第1页格子切换）</h4>
+  <div class="note" style="color:#e67e22;font-size:12px">
+    ⚡ 点击第1页 SB30/220V/照明 格子切换 on/off<br>
+    USB 为常驻辅助输出，不在控制网格内
+  </div>
+  <hr>
+  <h4>插槽状态</h4>
+  <div class="cr"><label>槽1</label><select onchange="setSlot(1,this.value)"><option value="idle">空闲</option><option value="charging" selected>充电</option><option value="error">故障</option></select></div>
+  <div class="cr"><label>槽2</label><select onchange="setSlot(2,this.value)"><option value="idle">空闲</option><option value="charging" selected>充电</option><option value="error">故障</option></select></div>
+  <div class="cr"><label>槽3</label><select onchange="setSlot(3,this.value)"><option value="idle" selected>空闲</option><option value="charging">充电</option><option value="error">故障</option></select></div>
+  <div class="cr"><label>槽4</label><select onchange="setSlot(4,this.value)"><option value="idle">空闲</option><option value="charging" selected>充电</option><option value="error">故障</option></select></div>
+  <div class="cr"><label>槽5</label><select onchange="setSlot(5,this.value)"><option value="idle" selected>空闲</option><option value="charging">充电</option><option value="error">故障</option></select></div>
+  <div class="cr"><label>槽6</label><select onchange="setSlot(6,this.value)"><option value="idle">空闲</option><option value="charging">充电</option><option value="error" selected>故障</option></select></div>
+  <hr>
+  <h4>安全监测</h4>
+  <div class="cr"><label>可燃气体</label><input type="range" id="gasSlider" min="0" max="100" value="0"><span id="gasVal">0%</span></div>
+  <div class="cr"><label>液体侵入</label><select id="liqSel"><option value="normal">正常</option><option value="alarm">告警</option></select></div>
+  <hr>
+  <button class="estop" id="burstBtn" onclick="toggleBurst()"><div class="estop-outer"><div class="estop-inner"><div class="estop-icon">⚡</div><div class="estop-label">STOP</div></div></div></button>
+  <div class="estop-text" id="burstLabel">爆发输出开关</div>
+  <div class="hint">
+    本页为 <b>前瞻特性分支</b>，对应 <code>高机动能源节点_前瞻特性规划.md</code>。<br>
+    第1页替换为输出控制网格：点击格子切换端口开/关，总输出实时累计。
+  </div>
+</div>
+
+<script>
+// ── 数据 ──
+const slots = {
+  1:{s:'charging',p:65},2:{s:'charging',p:42},3:{s:'idle',p:null},
+  4:{s:'charging',p:88},5:{s:'idle',p:null},6:{s:'error',p:null}
+};
+const ports = {
+  sb30:{on:true,w:350},light:{on:false,w:30},
+  usbA:{on:true,w:18},usbC:{on:true,w:100}
+};
+const portIds = {sb30:'oSB',ac:'oAc'};
+const portLabels = {usbA:'18W',usbC:'45W',oSB:'350W',ac:'220W'};
+
+let pi = 0, bs = 'normal', bbv = 78, bt = null;
+
+// ── DOM 缓存 ──
+const SE = {}, SB = {};
+for (let i=1;i<=6;i++){
+  SE[i]=document.getElementById('s'+i);
+  SB[i]=SE[i].querySelector('.slot-bar > div');
+  const d=slots[i];
+  if(d.s==='charging'&&d.p!=null){
+    SB[i].style.width=d.p+'%';
+    if(d.p>=80)SE[i].classList.add('charged');
+  }else if(d.s==='error'){SB[i].style.width='100%';}
+}
+
+// ── 输出控制网格点击 ──
+document.querySelectorAll('.oc').forEach(el=>{
+  el.addEventListener('click',function(){
+    if(bs!=='normal')return;
+    const p=this.dataset.port;
+    ports[p].on=!ports[p].on;
+    this.classList.toggle('on',ports[p].on);
+    this.classList.toggle('off',!ports[p].on);
+    // 同步顶栏输出条
+    if(portIds[p]){
+      const e=document.getElementById(portIds[p]);
+      if(ports[p].on){e.textContent=portLabels[p];e.classList.add('on')}
+      else{e.textContent='--';e.classList.remove('on')}
+    }
+    calcTotal();calc();
+  });
+});
+
+function calcTotal(){
+  let t=0;Object.values(ports).forEach(p=>{if(p.on)t+=p.w});
+  const el=document.getElementById('totOut');
+  el.textContent=t+'W';
+  el.classList.toggle('on',t>0);
+}
+
+// ── 槽位交互 ──
+function setSlot(n,st){
+  if(bs!=='normal')return;
+  const e=SE[n],b=SB[n],d=slots[n];d.s=st;
+  e.classList.remove('charged','error');
+  const stEl=e.querySelector('.slot-state'),pEl=e.querySelector('.slot-pct');
+  if(st==='idle'){
+    stEl.textContent='空闲';pEl.textContent='--';d.p=null;if(b)b.style.width='0%';
+  }else if(st==='charging'){
+    stEl.textContent='充电';const p=Math.floor(Math.random()*60)+30;
+    pEl.textContent=p+'%';d.p=p;if(b)b.style.width=p+'%';
+    if(p>=80)e.classList.add('charged');
+  }else{
+    e.classList.add('error');stEl.textContent='故障';pEl.textContent='ERR';d.p=null;if(b)b.style.width='100%';
+  }
+  chkFault();calc();
+}
+
+// ── 页面切换 ──
+function go(n){
+  const all=document.querySelectorAll('.page');
+  if(n<0)n=0;if(n>=all.length)n=all.length-1;
+  pi=n;document.getElementById('pages').style.transform='translateX(-'+(n*100)+'%)';
+  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('on',i===n));
+}
+let tx=0;
+document.addEventListener('touchstart',e=>{tx=e.changedTouches[0].screenX},{passive:true});
+document.addEventListener('touchend',e=>{const d=tx-e.changedTouches[0].screenX;if(Math.abs(d)>30)go(d>0?pi+1:pi-1)},{passive:true});
+let msX=0,md=false;
+document.addEventListener('mousedown',e=>{if(!document.getElementById('mainArea').contains(e.target))return;md=true;msX=e.screenX});
+document.addEventListener('mouseup',e=>{if(!md)return;md=false;const d=msX-e.screenX;if(Math.abs(d)>30)go(d>0?pi+1:pi-1)});
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft')go(pi-1);if(e.key==='ArrowRight')go(pi+1)});
+
+// ── 系统状态 ──
+function calc(){
+  if(bs!=='normal')return;
+  const st=document.getElementById('stat');
+  const chrg=Object.values(slots).some(s=>s.s==='charging');
+  const err=Object.values(slots).some(s=>s.s==='error');
+  const anyOut=Object.values(ports).some(p=>p.on);
+  const src=document.getElementById('psSel').value;
+  const inOn=src!=='none';
+  const full=parseInt(document.getElementById('batSlider').value)>=99;
+  if(anyOut){st.textContent='● 放电中';st.className='stat'}
+  else if(inOn&&(chrg||!full)){st.textContent='● 充电中';st.className='stat chg'}
+  else if(inOn&&full){st.textContent='● 满电待机';st.className='stat'}
+  else if(!inOn&&chrg){st.textContent='● 放电中';st.className='stat'}
+  else if(err&&!chrg&&!anyOut&&!inOn){st.textContent='◆ 故障';st.className='stat'}
+  else{st.textContent='○ 待机';st.className='stat'}
+}
+
+// ── 故障横幅 ──
+let lastErr='';
+function chkFault(){
+  if(bs!=='normal')return;
+  const e=[];for(let i=1;i<=6;i++){if(slots[i].s==='error')e.push(i+'号')}
+  const k=e.join(','),b=document.getElementById('fb'),t=document.getElementById('fbt');
+  if(k!==lastErr){lastErr=k;b.dataset.d='false'}
+  if(e.length&&b.dataset.d!=='true'){t.textContent=e.join('、')+'槽 电池故障';b.classList.add('show')}
+  else b.classList.remove('show');
+}
+document.getElementById('fbc').addEventListener('click',()=>{const b=document.getElementById('fb');b.dataset.d='true';b.classList.remove('show')});
+
+// ── 爆发模式 ──
+function toggleBurst(){
+  const o=document.getElementById('bo'),bc=document.getElementById('bc'),br=document.getElementById('br'),bc2=document.getElementById('bc2'),btn=document.getElementById('burstBtn'),lb=document.getElementById('burstLabel');
+  if(bs==='normal'){
+    bs='confirm';o.classList.add('show');bc.style.display='block';br.style.display='none';bc2.style.display='none';
+    lb.textContent='再次点击确认启动爆发输出';
+  }else if(bs==='confirm'){
+    bs='running';bc.style.display='none';br.style.display='flex';
+    btn.disabled=true;lb.textContent='爆发输出中...';lb.style.color='#e74c3c';
+    bbv=parseInt(document.getElementById('batSlider').value);startBurst();
+  }else if(bs==='complete'){
+    bs='normal';o.classList.remove('show');
+    btn.disabled=false;lb.textContent='爆发输出开关';lb.style.color='#888';
+  }
+}
+function startBurst(){
+  let sec=Math.floor(bbv*0.5*60);
+  bt=setInterval(()=>{
+    if(bs!=='running'){clearInterval(bt);return}
+    bbv=Math.max(0,bbv-0.5);sec=Math.max(0,sec-1);
+    document.getElementById('bbv').textContent=Math.floor(bbv)+'%';
+    const m=Math.floor(sec/60),s=sec%60;
+    document.getElementById('btv').textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+    document.getElementById('bts').textContent=(40+Math.floor(Math.random()*15))+'°C';
+    document.getElementById('bpw').textContent=(650+Math.floor(Math.random()*150))+'W';
+    if(bbv<=0){clearInterval(bt);bs='complete';document.getElementById('br').style.display='none';document.getElementById('bc2').style.display='block';const btn=document.getElementById('burstBtn');btn.textContent='重置系统';btn.disabled=false;btn.style.background='#27ae60'}
+  },100);
+}
+
+// ── 主电量联动 ──
+document.getElementById('batSlider').addEventListener('input',function(e){
+  if(bs!=='normal')return;
+  const v=e.target.value;
+  document.getElementById('batVal').textContent=v+'%';
+  document.getElementById('big').textContent=v+'%';
+  const bar=document.getElementById('bar');bar.style.width=v+'%';
+  bar.classList.toggle('low',v<=20);calc();
+});
+
+// ── 电源切换 ──
+document.getElementById('psSel').addEventListener('change',function(e){
+  if(bs!=='normal')return;
+  const v=e.target.value;
+  ['ps0','ps1','ps2'].forEach(id=>document.getElementById(id).classList.toggle('on',{solar:'ps0',mains:'ps1',diesel:'ps2'}[v]===id));
+  const map={solar:'太阳能',mains:'220V市电',diesel:'48V柴油发电机',none:'无'};
+  document.getElementById('ib').textContent=v==='none'?'○ 无输入':'● '+map[v]+'供电中';
+  const pwr={solar:'320W',mains:'750W',diesel:'500W',none:'0W'};
+  document.getElementById('idP').textContent=pwr[v];calc();
+});
+
+// ── 安全 ──
+function stopAll(){
+  for(let i=1;i<=6;i++){
+    if(slots[i].s==='charging'){setSlot(i,'idle');const sel=document.querySelectorAll('.cr select')[i+5];if(sel)sel.value='idle'}
+  }
+}
+let gl=0;
+document.getElementById('gasSlider').addEventListener('input',function(e){
+  if(bs!=='normal')return;
+  gl=parseInt(e.target.value);document.getElementById('gasVal').textContent=gl+'%';
+  const a=document.getElementById('ga'),av=document.getElementById('gav');
+  if(gl>=50){av.textContent=gl+'% LEL';a.classList.add('show');if(gl>=80)stopAll();calc()}
+  else a.classList.remove('show');
+});
+document.getElementById('gac').addEventListener('click',()=>document.getElementById('ga').classList.remove('show'));
+document.getElementById('liqSel').addEventListener('change',function(e){
+  if(bs!=='normal')return;
+  const a=document.getElementById('la');
+  if(e.target.value==='alarm'){a.classList.add('show');stopAll();calc()}
+  else a.classList.remove('show');
+});
+document.getElementById('lac').addEventListener('click',()=>{document.getElementById('la').classList.remove('show');document.getElementById('liqSel').value='normal'});
+
+// ── 3s 模拟更新 ──
+setInterval(()=>{
+  if(bs!=='normal')return;
+  document.getElementById('svT').textContent=(30+Math.floor(Math.random()*8))+'°C';
+  document.getElementById('svV').textContent=(25.5+Math.random()*0.6).toFixed(1)+'V';
+  document.getElementById('sysH').textContent=(95+Math.floor(Math.random()*5))+'%';
+  for(let i=1;i<=6;i++){
+    if(slots[i].s==='charging'){
+      const p=Math.min(100,slots[i].p+Math.floor(Math.random()*3));
+      slots[i].p=p;SE[i].querySelector('.slot-pct').textContent=p+'%';
+      if(SB[i])SB[i].style.width=p+'%';
+      SE[i].classList.toggle('charged',p>=80);
+    }
+  }
+},3000);
+
+// 初始化
+chkFault();calc();calcTotal();
+function fit(){
+  const w=document.getElementById('wrapper'),cw=document.body.clientWidth-310,ch=window.innerHeight-40;
+  const s=Math.min(1.6,Math.min(cw/549,ch/336));
+  w.style.transform='scale('+s+')';w.style.width=549*s+'px';w.style.height=336*s+'px';
+}
+window.addEventListener('resize',fit);fit();
+</script>
+</body>
+</html>

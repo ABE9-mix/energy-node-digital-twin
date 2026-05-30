@@ -1,0 +1,247 @@
+.sensor-panel {
+  position: absolute;
+  left: 16px;
+  top: 48px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 200px;
+  pointer-events: none;
+  max-height: calc(100% - 440px);
+  overflow-y: auto;
+}
+
+.sensor-panel::-webkit-scrollbar {
+  width: 3px;
+}
+
+.sensor-panel::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+}
+
+.sensor-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sensor-card {
+  background: rgba(28,28,32,0.85);
+  border: 1px solid #555;
+  border-radius: 8px;
+  padding: 6px 10px;
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+.sensor-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.sensor-icon {
+  font-size: 13px;
+}
+
+.sensor-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  letter-spacing: 0.3px;
+}
+
+.sensor-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sensor-body.centered {
+  align-items: center;
+}
+
+.sensor-value {
+  font-size: 15px;
+  font-weight: bold;
+  transition: color .3s;
+}
+
+.sensor-state {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.sensor-control {
+  margin-top: 4px;
+}
+
+.sensor-control input[type="range"] {
+  width: 100%;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.sensor-control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgba(255,255,255,0.3);
+  cursor: pointer;
+}
+
+.sensor-btn {
+  width: 100%;
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.6);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.sensor-btn:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.sensor-btn.danger {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.sensor-btn.danger:hover {
+  background: rgba(231,76,60,0.15);
+}
+
+.sensor-select {
+  width: 100%;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.8);
+  font-size: 11px;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+}
+
+.sensor-select:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.sensor-select option {
+  background: #2a2a2e;
+  color: #fff;
+}
+
+.sensor-slot-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.sensor-slot-label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  min-width: 22px;
+}
+
+.slot-select {
+  flex: 1;
+  padding: 2px 4px;
+  font-size: 10px;
+}
+
+/* Burst button */
+.burst-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+}
+
+.burst-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.burst-outer {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ddd, #999, #666);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.6), inset 0 2px 4px rgba(255,255,255,0.3);
+}
+
+.burst-inner {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ff6b6b, #c0392b);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid #e74c3c;
+  box-shadow: inset 0 -3px 6px rgba(0,0,0,0.3), inset 0 3px 6px rgba(255,255,255,0.15);
+  transition: transform .1s;
+}
+
+.burst-btn.confirm .burst-inner {
+  background: radial-gradient(circle at 30% 30%, #f39c12, #d35400);
+  border-color: #e67e22;
+}
+
+.burst-btn.done .burst-inner {
+  background: radial-gradient(circle at 30% 30%, #2ecc71, #27ae60);
+  border-color: #2ecc71;
+}
+
+.burst-btn:active:not(:disabled) .burst-inner {
+  transform: scale(0.93);
+}
+
+.burst-icon {
+  font-size: 14px;
+  line-height: 1;
+  margin-bottom: 0;
+}
+
+.burst-label {
+  font-size: 7px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.burst-status {
+  font-size: 11px;
+  color: #888;
+  margin-top: 6px;
+  text-align: center;
+}
+
+.burst-status.done {
+  color: #2ecc71;
+}
+
+.burst-status.confirm {
+  color: #e67e22;
+}
