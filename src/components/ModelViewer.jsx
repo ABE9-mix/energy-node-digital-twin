@@ -229,22 +229,12 @@ function ModelViewer({ selectedPart }) {
     window.dispatchEvent(new CustomEvent('model-parts', { detail: meshList }))
   }, [obj])
 
-  // Brighten dark materials + cast shadows
+  // Cast/receive shadow on all meshes (NO material brightening — GLB has authored materials)
   useEffect(() => {
     obj.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = true
         child.receiveShadow = true
-        const m = child.material
-        if (m && !m._upgraded) {
-          if (m.color) {
-            const lum = 0.2126 * m.color.r + 0.7152 * m.color.g + 0.0722 * m.color.b
-            if (lum < 0.3) {
-              m.color.multiplyScalar(Math.min(0.3 / Math.max(lum, 0.001), 5))
-            }
-          }
-          m._upgraded = true
-        }
       }
     })
   }, [obj])
@@ -274,7 +264,7 @@ function ModelViewer({ selectedPart }) {
   }, [obj, selectedPart])
 
   return (
-    <group ref={groupRef} scale={scale} rotation={[Math.PI * 1.5, 0, 0]}>
+    <group ref={groupRef} scale={scale}>
       <ModelInfo obj={obj} onCenter={() => {}} />
       <primitive object={obj} />
       <FlashingLights obj={obj} on={lightOn} />

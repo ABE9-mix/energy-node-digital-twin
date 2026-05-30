@@ -1,5 +1,5 @@
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { OrbitControls, Environment } from '@react-three/drei'
 import { Suspense, useEffect, useState } from 'react'
 import ModelViewer from './components/ModelViewer'
 import UIScreen from './components/UIScreen'
@@ -10,14 +10,15 @@ function Scene({ selectedPart, modelCenter }) {
   return (
     <>
       <color attach="background" args={['#1c1c20']} />
-      <ambientLight intensity={2.0} />
-      <directionalLight position={[15, 20, 15]} intensity={8} castShadow />
-      <directionalLight position={[-15, 10, -15]} intensity={4} color="#4488ff" />
-      <directionalLight position={[0, -10, 20]} intensity={3} color="#ff8844" />
-      <directionalLight position={[-10, 5, -10]} intensity={2} color="#88ffaa" />
-      <hemisphereLight args={['#ffffff', '#444466', 1.2]} />
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[15, 20, 15]} intensity={4} castShadow />
+      <directionalLight position={[-15, 10, -15]} intensity={1.5} color="#bbbbdd" />
+      <directionalLight position={[0, -10, 20]} intensity={1} color="#ddddaa" />
+      <directionalLight position={[-10, 5, -10]} intensity={0.8} color="#bbddcc" />
+      <hemisphereLight args={['#ffffff', '#666677', 0.3]} />
       <Suspense fallback={null}>
         <ModelViewer selectedPart={selectedPart} />
+        <Environment files="/textures/clouds_2K.exr" />
       </Suspense>
       <OrbitControls
         makeDefault enableDamping dampingFactor={0.08}
