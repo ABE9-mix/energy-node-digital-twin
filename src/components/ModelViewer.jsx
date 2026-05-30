@@ -4,6 +4,9 @@ import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react'
 import * as THREE from 'three'
 
+// Module-level cache for GLTF computation results (StrictMode-proof)
+const _glbMeta = new Map()
+
 const slotCycle = ['idle', 'charging', 'error']
 const slotLabels = { idle: '空闲', charging: '充电', error: '故障' }
 const slotColors = {
@@ -14,56 +17,111 @@ const slotColors = {
 
 function SlotLabel({ slotIndex, state, onClick }) {
   const c = slotColors[state]
+
+  const icons = { idle: '\u23F8', charging: '\u26A1', error: '\u26A0' }
+  const glowMap = {
+    idle: '0 0 6px rgba(100,100,120,0.4)',
+    charging: '0 0 10px rgba(46,204,113,0.5)',
+    error: '0 0 10px rgba(231,76,60,0.5)',
+  }
+
   return (
     <div
       onClick={onClick}
+      className="slot-label-3d"
+      data-state={state}
       style={{
-        background: c.bg,
-        border: `2px solid ${c.border}`,
+        background: `linear-gradient(135deg, ${c.bg}, rgba(0,0,0,0.6))`,
+        border: `1.5px solid ${c.border}`,
         borderRadius: '8px',
-        padding: '12px 24px',
+        padding: '5px 12px',
         color: c.text,
-        fontFamily: "'SimHei','Microsoft YaHei',sans-serif",
-        fontSize: '22px',
-        fontWeight: 'bold',
+        fontFamily: "'SimHei','Microsoft YaHei','SF Pro Text',sans-serif",
+        fontSize: '15px',
+        fontWeight: '600',
         cursor: 'pointer',
         userSelect: 'none',
         whiteSpace: 'nowrap',
         display: 'flex',
         alignItems: 'center',
-        gap: '16px',
-        transform: 'scale(1.4)',
-        transformOrigin: 'center center',
-        backdropFilter: 'blur(6px)',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
-        minWidth: '200px',
+        gap: '7px',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        boxShadow: `${glowMap[state]}, 0 4px 16px rgba(0,0,0,0.4)`,
+        minWidth: '100px',
         justifyContent: 'center',
-        letterSpacing: '1px',
+        letterSpacing: '0.5px',
+        transition: 'all 0.3s ease',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.fontSize = '17px'
+        e.currentTarget.style.boxShadow = `0 0 16px ${c.border}44, 0 6px 24px rgba(0,0,0,0.5)`
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.fontSize = '15px'
+        e.currentTarget.style.boxShadow = `${glowMap[state]}, 0 4px 16px rgba(0,0,0,0.4)`
       }}
     >
-      <span style={{ opacity: 0.5, fontSize: '18px' }}>#{slotIndex}</span>
-      <span>{slotLabels[state]}</span>
+      {/* Shine overlay */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.06) 50%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+
+      {/* Slot number badge */}
+      <div style={{
+        fontSize: '10px',
+        fontWeight: '700',
+        background: 'rgba(255,255,255,0.08)',
+        borderRadius: '4px',
+        padding: '2px 6px',
+        letterSpacing: '0',
+        border: `1px solid ${c.border}33`,
+      }}>
+        {slotIndex}
+      </div>
+
+      {/* Status icon */}
+      <span style={{ fontSize: '14px', lineHeight: 1 }}>{icons[state]}</span>
+
+      {/* Status text */}
+      <span style={{
+        fontSize: '13px',
+        fontWeight: '700',
+        letterSpacing: '1px',
+        textShadow: `0 0 8px ${c.border}33`,
+      }}>
+        {slotLabels[state]}
+      </span>
+
+      {/* State indicator dot */}
+      <div style={{
+        width: '6px', height: '6px',
+        borderRadius: '50%',
+        background: c.border,
+        boxShadow: `0 0 3px ${c.border}`,
+        animation: state === 'charging' ? 'labelPulse 1.2s ease-in-out infinite' :
+                   state === 'error' ? 'labelPulse 0.6s ease-in-out infinite' : 'none',
+      }} />
     </div>
   )
 }
 
 function useMeshCenters(obj) {
+  // Slot labels 1～3 → Part 21～23 (mesh indices 20～22), Slot 4～6 → Part 17/20/18 (mesh indices 16, 19, 17)
+  // Returns GLB-space centers (from _slotCenters, computed during mergeVertices
+  // before group scale is applied). worldLabels multiplies by scale later.
+  const sv = obj?.userData?._slotVersion ?? 0
   return useMemo(() => {
     if (!obj) return []
-    const centers = []
-    let idx = 0
-    obj.traverse((child) => {
-      if (child.isMesh && idx < 6) {
-        const geom = child.geometry
-        geom.computeBoundingBox()
-        const center = new THREE.Vector3()
-        geom.boundingBox.getCenter(center)
-        centers.push(center)
-        idx++
-      }
-    })
-    return centers
-  }, [obj])
+    if (obj.userData._slotCenters) {
+      return obj.userData._slotCenters
+    }
+    return []
+  }, [obj, sv])
 }
 
 function ModelInfo({ obj, onCenter }) {
@@ -99,25 +157,53 @@ const INITIAL_SLOTS = { 1: 'charging', 2: 'charging', 3: 'idle', 4: 'charging', 
 if (!window.__slotStates) window.__slotStates = { ...INITIAL_SLOTS }
 
 // Simple dashed line as a <primitive> Three.js Line
-function DirLine({ from, to, color }) {
-  const line = useMemo(() => {
-    const geom = new THREE.BufferGeometry().setFromPoints([
+// Animated energy beam connector
+function EnergyBeam({ from, to, color }) {
+  const lineRef = useRef()
+  const glowRef = useRef()
+
+  const geom = useMemo(() => {
+    const g = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(from[0], from[1], from[2]),
       new THREE.Vector3(to[0], to[1], to[2]),
     ])
-    const mat = new THREE.LineDashedMaterial({
-      color,
-      transparent: true,
-      opacity: 0.6,
-      dashSize: 0.3,
-      gapSize: 0.4,
-      depthWrite: false,
-    })
-    const l = new THREE.Line(geom, mat)
-    l.computeLineDistances()
-    return l
-  }, [from[0], from[1], from[2], to[0], to[1], to[2], color])
-  return <primitive object={line} />
+    return g
+  }, [from[0], from[1], from[2], to[0], to[1], to[2]])
+
+  useFrame(({ clock }) => {
+    if (lineRef.current) {
+      lineRef.current.material.opacity = 0.4 + 0.3 * Math.sin(clock.elapsedTime * 0.8)
+    }
+    if (glowRef.current) {
+      glowRef.current.material.opacity = 0.15 + 0.15 * Math.sin(clock.elapsedTime * 0.8 + 1)
+      glowRef.current.scale.setScalar(1 + 0.02 * Math.sin(clock.elapsedTime * 1.2))
+    }
+  })
+
+  return (
+    <>
+      {/* Main line */}
+      <line ref={lineRef} geometry={geom}>
+        <lineBasicMaterial
+          color={color}
+          transparent
+          opacity={0.5}
+          depthWrite={false}
+        />
+      </line>
+      {/* Glow line (wider) */}
+      <line ref={glowRef} geometry={geom}>
+        <lineBasicMaterial
+          color={color}
+          transparent
+          opacity={0.15}
+          linewidth={1}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </line>
+    </>
+  )
 }
 
 // Parts that are flashing indicator lights (sidebar 1-indexed: 33,35,37,39 → 0-indexed: 32,34,36,38)
@@ -168,6 +254,17 @@ function FlashingLights({ obj, on }) {
   return null
 }
 
+/** Helper: build local-to-obj transform by walking parent chain */
+function localToObjXform(child, obj) {
+  const xform = new THREE.Matrix4()
+  let node = child
+  while (node && node !== obj) {
+    xform.premultiply(node.matrix)
+    node = node.parent
+  }
+  return xform
+}
+
 function ModelViewer({ selectedPart }) {
   const groupRef = useRef()
   const [slotStates, setSlotStates] = useState({ ...window.__slotStates })
@@ -194,15 +291,71 @@ function ModelViewer({ selectedPart }) {
 
   const { scene: obj } = useGLTF('/models/bat.glb')
 
-  const scale = useMemo(() => {
+  // ONCE per GLTF scene (survives StrictMode double-mount via module-level _glbMeta)
+  if (!_glbMeta.has(obj.uuid)) {
+    // Collect all meshes first (by traversal order, matching Part numbering)
+    const allMeshes = []
     obj.traverse((child) => {
-      if (child.isMesh) {
-        // Merge vertices for smooth shading (welds vertices at same position)
-        const merged = mergeVertices(child.geometry)
-        merged.computeVertexNormals()
-        child.geometry = merged
+      if (child.isMesh) allMeshes.push(child)
+    })
+
+    // Compute ORIGINAL scene bounding box in GLB-local space
+    // Never rely on matrixWorld — it may include parent-group scale on
+    // StrictMode remount. Use local-to-obj transforms instead.
+    const origBox = new THREE.Box3()
+    allMeshes.forEach((child) => {
+      if (child.geometry.boundingBox) {
+        const bb = new THREE.Box3().copy(child.geometry.boundingBox)
+        bb.applyMatrix4(localToObjXform(child, obj))
+        origBox.union(bb)
       }
     })
+    const origSize = origBox.getSize(new THREE.Vector3())
+    const computedScale = 50 / Math.max(origSize.x, origSize.y, origSize.z)
+
+    // Pre-compute GLB-space centers for slot parts
+    // Slot 1～3 = Part 21～23 (mesh 20～22), Slot 4～6 = Part 17/20/18 (mesh 16,19,17)
+    const SLOT_MESH_INDICES = [20, 21, 22, 16, 19, 17]
+    const slotCenters = SLOT_MESH_INDICES.map((idx) => {
+      const child = allMeshes[idx]
+      child.geometry.computeBoundingBox()
+      const center = new THREE.Vector3()
+      child.geometry.boundingBox.getCenter(center)
+      center.applyMatrix4(localToObjXform(child, obj))
+      return center
+    })
+
+    // Store in module-level cache (survives StrictMode unmount/remount)
+    _glbMeta.set(obj.uuid, {
+      origScale: computedScale,
+      slotCenters,
+    })
+    // Also write to userData for useMeshCenters and other consumers
+    obj.userData._origScale = computedScale
+    obj.userData._slotCenters = slotCenters
+    obj.userData._slotVersion = (obj.userData._slotVersion || 0) + 1
+
+    // Merge vertices on clone to smooth normals
+    allMeshes.forEach((child) => {
+      const merged = mergeVertices(child.geometry.clone())
+      merged.computeVertexNormals()
+      child.geometry = merged
+    })
+    obj.userData._mvDone = true
+  } else if (!obj.userData._mvDone) {
+    // Second StrictMode mount: restore userData from module cache
+    const cached = _glbMeta.get(obj.uuid)
+    obj.userData._origScale = cached.origScale
+    obj.userData._slotCenters = cached.slotCenters
+    obj.userData._slotVersion = (obj.userData._slotVersion || 0) + 1
+    obj.userData._mvDone = true
+  }
+
+  const scale = useMemo(() => {
+    if (obj.userData._origScale) {
+      return obj.userData._origScale
+    }
+    // Fallback if mergeVertices hasn't run yet
     obj.updateMatrixWorld(true)
     const box = new THREE.Box3().setFromObject(obj)
     const size = box.getSize(new THREE.Vector3())
@@ -229,7 +382,7 @@ function ModelViewer({ selectedPart }) {
     window.dispatchEvent(new CustomEvent('model-parts', { detail: meshList }))
   }, [obj])
 
-  // Cast/receive shadow on all meshes (NO material brightening — GLB has authored materials)
+  // Cast/receive shadow on all meshes
   useEffect(() => {
     obj.traverse((child) => {
       if (child.isMesh) {
@@ -263,43 +416,69 @@ function ModelViewer({ selectedPart }) {
     })
   }, [obj, selectedPart])
 
-  return (
-    <group ref={groupRef} scale={scale}>
-      <ModelInfo obj={obj} onCenter={() => {}} />
-      <primitive object={obj} />
-      <FlashingLights obj={obj} on={lightOn} />
+  // World-space label positions (scaled from model space)
+  const worldLabels = useMemo(() => {
+    return meshCenters.map(pos => {
+      const len = Math.sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) || 1
+      const dx = pos.x / len, dy = pos.y / len, dz = pos.z / len
+      const atX = pos.x * scale, atY = pos.y * scale, atZ = pos.z * scale
+      return {
+        at: [atX, atY, atZ],
+        labelAt: [atX + dx * 12, atY + dy * 12, atZ + dz * 12],
+        guideTo: [atX + dx * 3, atY + dy * 3, atZ + dz * 3],
+      }
+    })
+  }, [meshCenters, scale])
 
-      {meshCenters.map((pos, i) => {
+  return (
+    <>
+      <group ref={groupRef} scale={scale}>
+        <ModelInfo obj={obj} onCenter={() => {}} />
+        <primitive object={obj} />
+        <FlashingLights obj={obj} on={lightOn} />
+      </group>
+
+      {worldLabels.map((wl, i) => {
         const slotIdx = i + 1
         const state = slotStates[slotIdx] || 'idle'
         const c = slotColors[state].border
-
-        // Radial direction from origin to mesh center, for outward label placement
-        const len = Math.sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) || 1
-        const dx = pos.x / len, dy = pos.y / len, dz = pos.z / len
-        const labelOffset = 12
-        const lx = pos.x + dx * labelOffset
-        const ly = pos.y + dy * labelOffset
-        const lz = pos.z + dz * labelOffset
+        const { at, labelAt, guideTo } = wl
 
         return (
-          <group key={i}>
-            <DirLine
-              from={[pos.x, pos.y, pos.z]}
-              to={[pos.x + dx * 2, pos.y + dy * 2, pos.z + dz * 2]}
-              color={c}
-            />
-            <mesh position={[pos.x, pos.y, pos.z]}>
-              <sphereGeometry args={[0.4, 6, 6]} />
-              <meshBasicMaterial color={c} transparent opacity={0.7} />
+          <group key={`3d-${i}`}>
+            {/* Animated connector beam */}
+            <EnergyBeam from={at} to={guideTo} color={c} />
+            {/* Pulsing origin node */}
+            <mesh position={at}>
+              <sphereGeometry args={[0.5, 12, 12]} />
+              <meshBasicMaterial color={c} transparent opacity={0.6} depthTest={false} />
             </mesh>
-            <Html position={[lx, ly, lz]} center distanceFactor={30} style={{ pointerEvents: 'auto' }}>
-              <SlotLabel slotIndex={slotIdx} state={state} onClick={() => toggleSlot(slotIdx)} />
-            </Html>
+            {/* Outer glow ring */}
+            <mesh position={at}>
+              <ringGeometry args={[0.5, 0.7, 12]} />
+              <meshBasicMaterial
+                color={c}
+                transparent
+                opacity={0.3}
+                side={THREE.DoubleSide}
+                depthWrite={false}
+                depthTest={false}
+              />
+            </mesh>
           </group>
         )
       })}
-    </group>
+
+      {worldLabels.map((wl, i) => {
+        const slotIdx = i + 1
+        const state = slotStates[slotIdx] || 'idle'
+        return (
+          <Html key={`html-${i}`} position={wl.labelAt} center occlude={false} style={{ pointerEvents: 'auto' }}>
+            <SlotLabel slotIndex={slotIdx} state={state} onClick={() => toggleSlot(slotIdx)} />
+          </Html>
+        )
+      })}
+    </>
   )
 }
 

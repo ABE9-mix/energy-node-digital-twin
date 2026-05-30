@@ -66,7 +66,7 @@ function App() {
       <div className="main-layout">
         <div className="canvas-wrapper">
           <Canvas
-            camera={{ position: [0, 0, 80], fov: 40, near: 1, far: 2000 }}
+            camera={{ position: [0, 0, 120], fov: 40, near: 1, far: 2000 }}
             gl={{ antialias: true, toneMapping: 3, toneMappingExposure: 1.2, alpha: false }}
             shadows
           >
