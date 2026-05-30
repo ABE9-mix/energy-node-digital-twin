@@ -1,7 +1,5 @@
-import { useLoader, useFrame } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader'
-import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader'
+import { useFrame } from '@react-three/fiber'
+import { Html, useGLTF } from '@react-three/drei'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react'
 import * as THREE from 'three'
@@ -194,15 +192,11 @@ function ModelViewer({ selectedPart }) {
     })
   }, [])
 
-  const materialCreator = useLoader(MTLLoader, '/models/bat.mtl')
-  materialCreator.preload()
-  const obj = useLoader(OBJLoader, '/models/bat.obj', (loader) => loader.setMaterials(materialCreator))
+  const { scene: obj } = useGLTF('/models/bat.glb')
 
   const scale = useMemo(() => {
-    const swapYZ = new THREE.Matrix4().set(1,0,0,0, 0,0,1,0, 0,1,0,0, 0,0,0,1)
     obj.traverse((child) => {
       if (child.isMesh) {
-        child.geometry.applyMatrix4(swapYZ)
         // Merge vertices for smooth shading (welds vertices at same position)
         const merged = mergeVertices(child.geometry)
         merged.computeVertexNormals()
@@ -235,30 +229,14 @@ function ModelViewer({ selectedPart }) {
     window.dispatchEvent(new CustomEvent('model-parts', { detail: meshList }))
   }, [obj])
 
-  // Convert MeshPhongMaterial to MeshStandardMaterial for envMap reflections + brighten dark ones
+  // Brighten dark materials + cast shadows
   useEffect(() => {
     obj.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = true
         child.receiveShadow = true
-        let m = child.material
+        const m = child.material
         if (m && !m._upgraded) {
-          if (m.type === 'MeshPhongMaterial') {
-            const color = m.color.clone()
-            const newMat = new THREE.MeshStandardMaterial({
-              color,
-              map: m.map,
-              alphaMap: m.alphaMap,
-              transparent: m.transparent,
-              opacity: m.opacity,
-              side: m.side,
-              roughness: 0.3,
-              metalness: 0.6,
-            })
-            child.material = newMat
-            m.dispose()
-            m = newMat
-          }
           if (m.color) {
             const lum = 0.2126 * m.color.r + 0.7152 * m.color.g + 0.0722 * m.color.b
             if (lum < 0.3) {
